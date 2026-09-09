@@ -10,13 +10,14 @@
         kevat: { label: 'Kevätilta 15.4.2025 klo 22.00', date: new Date(Date.UTC(2025, 3, 15, 19, 0, 0)) }
     };
 
+    // Linnunrata katoaa nopeasti valosaasteeseen: Bortle 5:llä se on enää aavistus, 6:sta ylöspäin sitä ei näy.
     var BORTLE = {
         1: { magLimit: 6.5, milkyWay: 1.0, glow: 0.0, text: 'Bortle 1 — erämaataivas' },
-        2: { magLimit: 6.3, milkyWay: 0.85, glow: 0.08, text: 'Bortle 2 — todella pimeä' },
-        3: { magLimit: 6.1, milkyWay: 0.6, glow: 0.2, text: 'Bortle 3 — maaseutu' },
-        4: { magLimit: 5.8, milkyWay: 0.35, glow: 0.34, text: 'Bortle 4 — maaseudun reuna' },
-        5: { magLimit: 5.4, milkyWay: 0.15, glow: 0.52, text: 'Bortle 5 — esikaupunki' },
-        6: { magLimit: 5.0, milkyWay: 0.05, glow: 0.7, text: 'Bortle 6 — kirkas esikaupunki' },
+        2: { magLimit: 6.3, milkyWay: 0.72, glow: 0.08, text: 'Bortle 2 — todella pimeä' },
+        3: { magLimit: 6.1, milkyWay: 0.42, glow: 0.2, text: 'Bortle 3 — maaseutu' },
+        4: { magLimit: 5.8, milkyWay: 0.2, glow: 0.34, text: 'Bortle 4 — maaseudun reuna' },
+        5: { magLimit: 5.4, milkyWay: 0.06, glow: 0.52, text: 'Bortle 5 — esikaupunki' },
+        6: { magLimit: 5.0, milkyWay: 0, glow: 0.7, text: 'Bortle 6 — kirkas esikaupunki' },
         7: { magLimit: 4.5, milkyWay: 0, glow: 0.88, text: 'Bortle 7 — kaupungin laita' }
     };
 

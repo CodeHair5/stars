@@ -52,14 +52,15 @@
         return sprite;
     }
 
-    /* Paljain silmin erottuvat syvän taivaan kohteet. minLimit = raja-magnitudi, jolla kohde alkaa erottua. */
+    /* Paljain silmin erottuvat syvän taivaan kohteet.
+       minLimit = raja-magnitudi, jolla kohde alkaa juuri ja juuri erottua; peak = pintakirkkaus täysin pimeällä taivaalla. */
     var DEEP_SKY = [
-        { name: 'M31 Andromedan galaksi', ra: 10.6847, dec: 41.2690, minLimit: 4.8, width: 3.0, height: 1.0, angle: 35 },
-        { name: 'M33 Kolmion galaksi', ra: 23.4621, dec: 30.6602, minLimit: 6.2, width: 1.2, height: 0.8, angle: 20 },
-        { name: 'h+chi Persei', ra: 34.7500, dec: 57.1330, minLimit: 5.2, width: 1.2, height: 0.7, angle: 0 },
-        { name: 'M42 Orionin sumu', ra: 83.8221, dec: -5.3911, minLimit: 5.0, width: 1.1, height: 0.9, angle: 0 },
-        { name: 'M44 Seimi', ra: 130.1000, dec: 19.6700, minLimit: 5.0, width: 1.6, height: 1.4, angle: 0 },
-        { name: 'M13 Herkuleen pättyminen', ra: 250.4230, dec: 36.4613, minLimit: 5.9, width: 0.5, height: 0.5, angle: 0 }
+        { name: 'M31 Andromedan galaksi', ra: 10.6847, dec: 41.2690, minLimit: 5.15, peak: 0.30, width: 3.0, height: 1.0, angle: 35 },
+        { name: 'M33 Kolmion galaksi', ra: 23.4621, dec: 30.6602, minLimit: 6.05, peak: 0.15, width: 1.2, height: 0.8, angle: 20 },
+        { name: 'h+chi Persei', ra: 34.7500, dec: 57.1330, minLimit: 5.20, peak: 0.30, width: 1.2, height: 0.7, angle: 0 },
+        { name: 'M42 Orionin sumu', ra: 83.8221, dec: -5.3911, minLimit: 4.70, peak: 0.38, width: 1.1, height: 0.9, angle: 0 },
+        { name: 'M44 Seimi', ra: 130.1000, dec: 19.6700, minLimit: 5.15, peak: 0.20, width: 1.6, height: 1.4, angle: 0 },
+        { name: 'M13 Herkuleen pättyminen', ra: 250.4230, dec: 36.4613, minLimit: 5.65, peak: 0.22, width: 0.5, height: 0.5, angle: 0 }
     ];
 
     function createNebulaTexture() {
@@ -77,10 +78,97 @@
         return new THREE.CanvasTexture(canvas);
     }
 
-    function gaussian() {
-        var u = 1 - Math.random();
-        var v = Math.random();
-        return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
+    /* ---- Linnunradan pintakirkkausmalli galaktisissa koordinaateissa (l, b) ---- */
+
+    function angleDelta(a, b) {
+        var d = Math.abs(a - b) % 360;
+        return d > 180 ? 360 - d : d;
+    }
+
+    function bump(l, center, width) {
+        var d = angleDelta(l, center) / width;
+        return Math.exp(-d * d);
+    }
+
+    function hash2(ix, iy) {
+        var s = Math.sin(ix * 127.1 + iy * 311.7) * 43758.5453;
+        return s - Math.floor(s);
+    }
+
+    function smoothNoise(x, y) {
+        var ix = Math.floor(x), iy = Math.floor(y);
+        var fx = x - ix, fy = y - iy;
+        var ux = fx * fx * (3 - 2 * fx);
+        var uy = fy * fy * (3 - 2 * fy);
+        var a = hash2(ix, iy), b = hash2(ix + 1, iy), c = hash2(ix, iy + 1), d = hash2(ix + 1, iy + 1);
+        return a + (b - a) * ux + (c - a) * uy + (a - b - c + d) * ux * uy;
+    }
+
+    // Kolme oktaavia arvokohinaa antaa tähtipilville epätasaisen, laikukkaan rakenteen.
+    function fbm(x, y) {
+        return 0.6 * smoothNoise(x, y) +
+            0.28 * smoothNoise(x * 2.3 + 5.2, y * 2.3 + 1.3) +
+            0.12 * smoothNoise(x * 5.1 + 9.7, y * 5.1 + 4.4);
+    }
+
+    // Tähtipilvien yhteenlaskettu kirkkaus: kirkkain keskustan suuntaan, himmein antikeskustassa.
+    function starCloudBrightness(l) {
+        return 0.22 + 0.52 * Math.exp(-Math.pow(angleDelta(l, 0) / 62, 2)) +
+            0.65 * bump(l, 8, 9) +      // Jousimiehen suuri tähtipilvi
+            0.42 * bump(l, 27, 7) +     // Kilven tähtipilvi
+            0.24 * bump(l, 47, 10) +    // Kotkan haara
+            0.62 * bump(l, 79, 12) +    // Joutsenen tähtipilvi
+            0.17 * bump(l, 124, 18) +   // Kassiopeia–Perseus
+            0.10 * bump(l, 206, 22);    // Yksisarvinen antikeskustan tuolla puolen
+    }
+
+    // Pölyn aiheuttama himmennys: Suuri repeämä sekä muutama tunnettu tumma sumu.
+    function dustExtinction(l, b) {
+        var sl = l > 180 ? l - 360 : l;
+
+        // Suuri repeämä halkaisee vyön Joutsenesta Kotkan ja Käärmeenkantajan kautta kohti keskustaa.
+        var depth = 0.88 * Math.exp(-Math.pow((sl - 42) / 46, 2));
+        var center = 0.6 + sl * 0.022;
+        var width = 2.6 + 1.6 * Math.exp(-Math.pow((sl - 75) / 20, 2));
+        var dust = 1 - depth * Math.exp(-Math.pow((b - center) / width, 2));
+
+        // Pohjoinen hiilisäkki Denebin eteläpuolella.
+        dust *= 1 - 0.45 * Math.exp(-Math.pow(angleDelta(l, 80) / 5.5, 2) - Math.pow((b - 1.2) / 3.5, 2));
+        // Härän ja Perseuksen pölypilvet antikeskustan puolella.
+        dust *= 1 - 0.30 * Math.exp(-Math.pow(angleDelta(l, 162) / 17, 2) - Math.pow((b + 5) / 6, 2));
+
+        return dust;
+    }
+
+    function milkyWayBrightness(l, b) {
+        // Keskustan pullistuma levittää vyötä; antikeskustassa vyö on kapea.
+        var thickness = 1 + 1.6 * Math.exp(-Math.pow(angleDelta(l, 0) / 26, 2));
+        var core = Math.exp(-Math.abs(b) / (2.6 * thickness));
+        var halo = Math.exp(-Math.pow(b / (11 * thickness), 2));
+        var profile = 0.72 * core + 0.28 * halo;
+        var mottle = 0.5 + 0.8 * fbm(l / 6.5, b / 4.5);
+
+        return starCloudBrightness(l) * profile * dustExtinction(l, b) * mottle;
+    }
+
+    /* Otanta arvotaan kerran ja käytetään uudelleen: vain koordinaattimuunnos toistetaan. */
+    var milkyWaySamples = null;
+
+    function buildMilkyWaySamples() {
+        if (milkyWaySamples) return milkyWaySamples;
+
+        milkyWaySamples = [];
+        // Hylkäysotanta: pisteiden tiheys seuraa kirkkausmallia, joten repeämä jää aidosti aukoksi.
+        for (var i = 0; i < 300000 && milkyWaySamples.length < 34000; i++) {
+            var l = Math.random() * 360;
+            var b = -32 + Math.random() * 64;
+            var brightness = milkyWayBrightness(l, b);
+            // Neliöjuuri jakaa kirkkauden tiheyden ja kirkkauden kesken -> tasaisempi, vähemmän rakeinen usva.
+            var weight = Math.sqrt(Math.max(0, brightness));
+            if (Math.random() > weight) continue;
+            milkyWaySamples.push({ l: l, b: b, weight: weight });
+        }
+        return milkyWaySamples;
     }
 
     function create(options) {
@@ -169,6 +257,42 @@
             ].join('\n')
         });
 
+        // Linnunradalle oma, pehmeämpi materiaali: ei terävää ydintä, vain sumuinen liuku -> usvaisempi vaikutelma.
+        var mistMaterial = new THREE.ShaderMaterial({
+            transparent: true,
+            depthWrite: false,
+            blending: THREE.AdditiveBlending,
+            uniforms: {
+                pixelRatio: { value: renderer.getPixelRatio() },
+                sizeScale: { value: 1 }
+            },
+            vertexShader: [
+                'attribute float size;',
+                'attribute float alpha;',
+                'attribute vec3 starColor;',
+                'uniform float pixelRatio;',
+                'uniform float sizeScale;',
+                'varying vec3 vColor;',
+                'varying float vAlpha;',
+                'void main() {',
+                '  vColor = starColor;',
+                '  vAlpha = alpha;',
+                '  gl_PointSize = size * sizeScale * pixelRatio;',
+                '  gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);',
+                '}'
+            ].join('\n'),
+            fragmentShader: [
+                'varying vec3 vColor;',
+                'varying float vAlpha;',
+                'void main() {',
+                '  float r = length(gl_PointCoord - vec2(0.5)) * 2.0;',
+                '  if (r > 1.0) discard;',
+                '  float falloff = exp(-r * r * 2.6);',
+                '  gl_FragColor = vec4(vColor, vAlpha * falloff);',
+                '}'
+            ].join('\n')
+        });
+
         var nebulaTexture = createNebulaTexture();
         var deepSkyGroup = new THREE.Group();
         scene.add(deepSkyGroup);
@@ -183,13 +307,13 @@
             return new THREE.Vector3(vector.x * SKY_RADIUS, vector.y * SKY_RADIUS, vector.z * SKY_RADIUS);
         }
 
-        function makeCloud(positions, colors, sizes, alphas) {
+        function makeCloud(positions, colors, sizes, alphas, material) {
             var geometry = new THREE.BufferGeometry();
             geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
             geometry.setAttribute('starColor', new THREE.Float32BufferAttribute(colors, 3));
             geometry.setAttribute('size', new THREE.Float32BufferAttribute(sizes, 1));
             geometry.setAttribute('alpha', new THREE.Float32BufferAttribute(alphas, 1));
-            return new THREE.Points(geometry, starMaterial);
+            return new THREE.Points(geometry, material || starMaterial);
         }
 
         function removeCloud(cloud) {
@@ -236,37 +360,37 @@
             scene.add(starPoints);
         }
 
-        // Linnunrata syntyy galaktisen tason ympärille arvotuista himmeistä pisteistä.
+        // Linnunrata piirretään kirkkausmallin mukaan arvotuista pehmeistä usvapilkuista.
         function buildMilkyWay() {
             removeCloud(milkyWayPoints);
             milkyWayPoints = null;
             if (milkyWayStrength <= 0.02) return;
 
+            var samples = buildMilkyWaySamples();
             var positions = [], colors = [], sizes = [], alphas = [];
-            for (var i = 0; i < 26000; i++) {
-                var longitude = Math.random() * 360;
-                // Kapea kirkas ydin ja leviämpi hohde.
-                var latitude = gaussian() * (i % 3 === 0 ? 10.5 : 4.5);
-                if (Math.abs(latitude) > 26) continue;
 
-                var equatorial = Astro.galacticToEquatorial(longitude, latitude);
+            for (var i = 0; i < samples.length; i++) {
+                var sample = samples[i];
+                var equatorial = Astro.galacticToEquatorial(sample.l, sample.b);
                 var horizontal = Astro.equatorialToHorizontal(
                     equatorial.ra, equatorial.dec, observer.latitude, observer.longitude, julianDay);
-                if (horizontal.altitude < 1) continue;
+                if (horizontal.altitude < 2) continue;
 
-                // Kirkkaimmillaan Jousimiehen ja Joutsenen suunnassa, himmeimmillään antikeskustassa.
-                var longitudeWeight = 0.3 + 0.7 * Math.pow(0.5 + 0.5 * Math.cos((longitude - 40) * Math.PI / 180), 1.1);
-                var extinction = Math.min(1, 0.15 + horizontal.altitude / 25);
+                // Ilmakehän vaimennus puree matalalla oleviin kohteisiin voimakkaasti.
+                var extinction = Math.pow(Math.min(1, 0.08 + horizontal.altitude / 32), 1.4);
                 var point = spherePoint(horizontal.altitude, horizontal.azimuth);
 
+                // Keskustan pullistuma on pölyn punertama, muualla vyö on kellertävän valkoinen.
+                var warm = Math.exp(-Math.pow(angleDelta(sample.l, 0) / 45, 2));
                 positions.push(point.x, point.y, point.z);
-                colors.push(0.86, 0.89, 1.0);
-                sizes.push(2.2 + Math.random() * 3.4);
-                alphas.push(longitudeWeight * extinction * milkyWayStrength * (0.3 + Math.random() * 0.7) * 0.34);
+                colors.push(0.90 + 0.10 * warm, 0.90, 0.88 - 0.10 * warm);
+                sizes.push(8 + Math.random() * 10);
+                // Pintakirkkaus jää selvästi tummempien tähtien alle: vyö on hohde, ei valonlähde.
+                alphas.push(sample.weight * extinction * milkyWayStrength * 0.11);
             }
 
             if (!positions.length) return;
-            milkyWayPoints = makeCloud(positions, colors, sizes, alphas);
+            milkyWayPoints = makeCloud(positions, colors, sizes, alphas, mistMaterial);
             scene.add(milkyWayPoints);
         }
 
@@ -276,20 +400,25 @@
             }
 
             DEEP_SKY.forEach(function (object) {
-                var visibility = Math.min(0.8, (magLimit - object.minLimit) / 1.2);
-                if (visibility <= 0.03) return;
+                // Kohde saavuttaa täyden kirkkautensa vasta erämaataivaalla ja nousee kynnyksensä yläpuolella hitaasti.
+                var range = Math.max(0.4, 6.6 - object.minLimit);
+                var ramp = Math.max(0, Math.min(1, (magLimit - object.minLimit) / range));
+                var visibility = Math.pow(ramp, 1.5) * object.peak;
 
                 var horizontal = Astro.equatorialToHorizontal(
                     object.ra, object.dec, observer.latitude, observer.longitude, julianDay);
                 if (horizontal.altitude < 4) return;
 
-                var extinction = Math.min(1, 0.2 + horizontal.altitude / 25);
+                var extinction = Math.pow(Math.min(1, 0.08 + horizontal.altitude / 32), 1.4);
+                var opacity = visibility * extinction;
+                if (opacity <= 0.006) return;
+
                 var sprite = new THREE.Sprite(new THREE.SpriteMaterial({
                     map: nebulaTexture,
                     transparent: true,
                     depthWrite: false,
                     blending: THREE.AdditiveBlending,
-                    opacity: visibility * extinction,
+                    opacity: opacity,
                     rotation: (object.angle || 0) * Math.PI / 180
                 }));
 
@@ -325,7 +454,10 @@
         function applyCamera() {
             pitch = Math.max(-0.35, Math.min(1.45, pitch));
             camera.rotation.set(pitch, yaw, 0);
-            starMaterial.uniforms.sizeScale.value = Math.min(2.2, Math.max(1, BASE_FOV / camera.fov));
+            var zoom = BASE_FOV / camera.fov;
+            starMaterial.uniforms.sizeScale.value = Math.min(2.2, Math.max(1, zoom));
+            // Usva skaalautuu zoomin mukana, jotta vyö säilyttää kulmakokonsa eikä rakeistu.
+            mistMaterial.uniforms.sizeScale.value = Math.max(0.6, Math.min(2.6, zoom));
         }
 
         function setFov(value) {

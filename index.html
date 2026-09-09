@@ -22,19 +22,6 @@
 
         <aside>
             <section class="panel">
-                <h2>Taivaan asetukset</h2>
-                <label class="field" for="season-select">Vuodenaika</label>
-                <select id="season-select">
-                    <option value="syksy">Syksy — lokakuun ilta</option>
-                    <option value="kevat">Kevät — huhtikuun ilta</option>
-                </select>
-
-                <label class="field" for="bortle-slider">Valosaaste (Bortle)</label>
-                <input type="range" id="bortle-slider" min="1" max="7" step="1" value="5">
-                <div id="bortle-label"></div>
-            </section>
-
-            <section class="panel">
                 <h2>Etsi taivaalta</h2>
                 <div id="target-name">–</div>
                 <div id="target-latin"></div>
@@ -46,6 +33,19 @@
                     <button id="next-button" disabled>Seuraava tehtävä</button>
                 </div>
                 <div id="mode-hint"></div>
+            </section>
+
+            <section class="panel">
+                <h2>Taivaan asetukset</h2>
+                <label class="field" for="season-select">Vuodenaika</label>
+                <select id="season-select">
+                    <option value="syksy">Syksy — lokakuun ilta</option>
+                    <option value="kevat">Kevät — huhtikuun ilta</option>
+                </select>
+
+                <label class="field" for="bortle-slider">Valosaaste (Bortle)</label>
+                <input type="range" id="bortle-slider" min="1" max="7" step="1" value="5">
+                <div id="bortle-label"></div>
             </section>
 
             <section class="panel">
@@ -63,14 +63,16 @@
             </section>
 
             <section class="panel">
-                <h2>Ohjeet</h2>
-                <ul class="help">
-                    <li>Käännä katsetta vetämällä sormella tai hiirellä.</li>
-                    <li>Zoomaa nipistämällä kahdella sormella tai hiiren rullalla.</li>
-                    <li>Paina <em>Rajaa kohde</em> ja piirrä alue tähdistön ympäri.</li>
-                    <li>Pimeällä taivaalla (Bortle 1–3) näkyvät myös Linnunrata ja Andromedan galaksi.</li>
-                    <li>Tähdistöjen viivat piirtyvät vasta vastauksen jälkeen.</li>
-                </ul>
+                <details class="help-details">
+                    <summary>Ohjeet</summary>
+                    <ul class="help">
+                        <li>Käännä katsetta vetämällä sormella tai hiirellä.</li>
+                        <li>Zoomaa nipistämällä kahdella sormella tai hiiren rullalla.</li>
+                        <li>Paina <em>Rajaa kohde</em> ja piirrä alue tähdistön ympäri.</li>
+                        <li>Pimeällä taivaalla (Bortle 1–4) erottuvat Linnunrata ja Andromedan galaksi. Joutsenessa Linnunradan halkaisee tumma Suuri repeämä.</li>
+                        <li>Tähdistöjen viivat piirtyvät vasta vastauksen jälkeen.</li>
+                    </ul>
+                </details>
             </section>
         </aside>
     </main>
